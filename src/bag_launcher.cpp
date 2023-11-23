@@ -4,6 +4,7 @@
 /// as a ROS node and loads different configs for the BagRecorder and launches
 /// the bag recorder with this config and stops it by published command.
 #include "bag_launcher.h"
+#include "boost/filesystem.hpp" 
 #include <fstream>
 
 namespace bag_launcher_node {
@@ -63,6 +64,11 @@ BagLauncher::~BagLauncher(){
 void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
     //find the recorder under that name if it exists already
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->config);
+
+    if (!boost::filesystem::exists(data_folder_)) {
+        ROS_INFO("Folder did not exist, creating directory: %s", data_folder_.c_str());
+        boost::filesystem::create_directories(data_folder_);
+    }
 
     //if it does not exists make it.
     if(recorder == recorders_.end()) {
