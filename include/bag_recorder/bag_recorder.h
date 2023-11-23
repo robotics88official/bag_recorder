@@ -76,7 +76,11 @@ namespace bag_recorder {
             // flow control function - sets flags, starts threads, starts/kills subscribers
             std::string start_recording(std::string bag__name, std::vector<std::string> topics, bool record_all_topics = false); //-- initializes subscribers starts record thread, initializes all record variables, generates bag_ name
             void stop_recording(); //-- kills subscribers, sets flag for write_thread to stop after queue is cleared
+            void start_writing();
+            void stop_writing();
             void immediate_stop_recording(); //-- kills subscribers, sets flag for write_thread to stop recording immediately
+            void updateFileName();
+            bool check_duration(const ros::Time& t);
 
             //status check functions
             bool is_active(); //-- if there is a bag_ being recorded to
@@ -114,6 +118,11 @@ namespace bag_recorder {
             rosbag::Bag                   bag_;
             std::string                   bag_filename_ = ""; //initialized in cas get_bagname is called
             bool                          bag_active_ = false; //is by default not active
+
+            // time/splits
+            ros::Time                     start_time_;
+            float                         split_bag_s_ = 60.0;
+            int                           split_count_ = 0;
 
             //stop signals
             bool                          clear_queue_signal_;

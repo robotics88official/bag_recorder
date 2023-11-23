@@ -147,7 +147,7 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
         return "";
     }
 
-    bag_name += string(".bag");
+    bag_name += "_" + std::to_string(split_count_) + string(".bag");
     bag_filename_ = unique_folder + "/" + bag_name;
 
     message_queue_ = new std::queue<OutgoingMessage>;
@@ -177,22 +177,8 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
         ROS_ERROR("No Topics Supplied to be recorded. Aborting bag %s.", bag_name.c_str());
         return "";
     }
-
-    // Open bag_ file for writing
-    // This got moved here from queue_processor so all the errors that would
-    // cause the bag not to start would be in here.
-    bag_.setCompression(rosbag::compression::Uncompressed);
-    bag_.setChunkThreshold(1024 * 768);
-
-    try {
-        bag_.open(bag_filename_ + string(".active"), rosbag::bagmode::Write);
-    }
-    catch (rosbag::BagException e) {
-        //needs the mutex because the start functions read bag_active_
-        ROS_ERROR("Error writing: %s", e.what());
-        bag_active_ = false;
-        return "";
-    }
+    start_time_ = ros::Time::now();
+    start_writing();
 
     // start write thread
     record_thread_ = boost::thread(boost::bind(&BagRecorder::queue_processor, this));
@@ -223,6 +209,29 @@ void BagRecorder::stop_recording() {
 
     ROS_INFO("Stopping BagRecorder, clearing queue.");
 } // stop_recording()
+
+void BagRecorder::start_writing() {
+    // Open bag_ file for writing
+    // This got moved here from queue_processor so all the errors that would
+    // cause the bag not to start would be in here.
+    bag_.setCompression(rosbag::compression::Uncompressed);
+    bag_.setChunkThreshold(1024 * 768);
+
+    try {
+        bag_.open(bag_filename_ + string(".active"), rosbag::bagmode::Write);
+    }
+    catch (rosbag::BagException e) {
+        //needs the mutex because the start functions read bag_active_
+        ROS_ERROR("Error writing: %s", e.what());
+        bag_active_ = false;
+    }
+}
+
+void BagRecorder::stop_writing() {
+    ROS_INFO("Closing %s.", bag_filename_.c_str());
+    bag_.close();
+    rename((bag_filename_ + string(".active")).c_str(), bag_filename_.c_str());
+}
 
 /**
 * @brief immediate_stop_recording() stops the bag immediately
@@ -413,6 +422,11 @@ void BagRecorder::queue_processor() {
             //note that the timed_wait function unlocks queue_lock
             //so other threads can write to the queue
             queue_condition_.timed_wait(queue_lock, xt);
+            if (check_duration(ros::Time::now()))
+            {
+                finished = true;
+                break;
+            }
         }
         //if finished flag is set to true stop recording or stop_signal_ recieved
         {
@@ -434,10 +448,7 @@ void BagRecorder::queue_processor() {
         if (can_log())
             bag_.write(out.topic, out.time, *out.msg, out.connection_header);
     }
-
-    ROS_INFO("Closing %s.", bag_filename_.c_str());
-    bag_.close();
-    rename((bag_filename_ + string(".active")).c_str(), bag_filename_.c_str());
+    stop_writing();
 
     // do not need the mutex because the function killing subscribers has a mutex
     // that holds the queue processor. So when we get here all subcribers are
@@ -448,6 +459,27 @@ void BagRecorder::queue_processor() {
     boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
     bag_active_ = false;
 } // queue_processor()
+
+void BagRecorder::updateFileName() {
+    int ind = bag_filename_.rfind("_");
+    bag_filename_ = bag_filename_.substr(0, ind) + "_" + std::to_string(split_count_) + ".bag";
+}
+
+bool BagRecorder::check_duration(const ros::Time& t)
+{
+    if (t - start_time_ > ros::Duration(split_bag_s_))
+    {
+        while (t - start_time_ > ros::Duration(split_bag_s_))
+        {
+            stop_writing();
+            split_count_++;
+            updateFileName();
+            start_time_ += ros::Duration(split_bag_s_);
+            start_writing();
+        }
+    }
+    return false;
+}
 
 /**
 * @brief run_scheduled_checks() sees if a function is scheduled to run and runs it if so
