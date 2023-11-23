@@ -136,6 +136,9 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
       bag_name.erase(ind);
     }
 
+    std::string unique_folder = data_folder_ + get_time_str();
+    boost::filesystem::create_directory(unique_folder);
+
     if(append_date_)
         bag_name += string("_") + get_time_str();
 
@@ -145,7 +148,7 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
     }
 
     bag_name += string(".bag");
-    bag_filename_ = data_folder_ + bag_name;
+    bag_filename_ = unique_folder + "/" + bag_name;
 
     message_queue_ = new std::queue<OutgoingMessage>;
 
