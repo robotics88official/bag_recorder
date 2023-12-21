@@ -2,6 +2,7 @@
     <arg name="configuration_directory" default="$(find bag_recorder)/config"/>
     <arg name="data_directory" default="/home/parallels/data/"/>
     <arg name="name_topic" default="/record/bag_name"/>
+    <arg name="heartbeat_interval" default="5.0"/>
 
     <!-- Launch recorder node -->
     <node pkg="bag_recorder" type="bag_recorder_node" name="rosbag_recorder_node" output="screen" respawn="true">
