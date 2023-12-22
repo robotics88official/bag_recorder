@@ -23,7 +23,7 @@
         <!-- Topic to publish heartbeat to -->
         <param name="heartbeat_topic"           type="string"       value="/record/heartbeat"/>
         <!-- Interval in seconds on which to publish bag heartbeats -->
-        <param name="heartbeat_interval"        type="double"       value="10.0"/>
+        <param name="heartbeat_interval"        type="double"       value="$(arg heartbeat_interval)"/>
         <!-- Whether or not to default to recording all topics if a config file is not found -->
         <param name="default_record_all"        type="bool"         value="false"/>
     </node>
