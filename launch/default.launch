@@ -2,6 +2,7 @@
     <arg name="configuration_directory" default="$(find bag_recorder)/config"/>
     <arg name="data_directory" default="/home/parallels/data/"/>
     <arg name="name_topic" default="/record/bag_name"/>
+    <arg name="heartbeat_interval" default="5.0"/>
 
     <!-- Launch recorder node -->
     <node pkg="bag_recorder" type="bag_recorder_node" name="rosbag_recorder_node" output="screen" respawn="true">
@@ -22,7 +23,7 @@
         <!-- Topic to publish heartbeat to -->
         <param name="heartbeat_topic"           type="string"       value="/record/heartbeat"/>
         <!-- Interval in seconds on which to publish bag heartbeats -->
-        <param name="heartbeat_interval"        type="double"       value="10.0"/>
+        <param name="heartbeat_interval"        type="double"       value="$(arg heartbeat_interval)"/>
         <!-- Whether or not to default to recording all topics if a config file is not found -->
         <param name="default_record_all"        type="bool"         value="false"/>
     </node>
