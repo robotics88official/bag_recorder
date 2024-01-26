@@ -64,7 +64,7 @@ BagLauncher::~BagLauncher(){
 void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
     //find the recorder under that name if it exists already
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->config);
-
+    data_folder_ = msg->data_dir;
     if (!boost::filesystem::exists(data_folder_)) {
         ROS_INFO("Folder did not exist, creating directory: %s", data_folder_.c_str());
         boost::filesystem::create_directories(data_folder_);
