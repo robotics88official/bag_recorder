@@ -57,10 +57,12 @@ int main(int argc, char** argv) {
     BagLauncher bag_launcher(nh, options);
 
     //main loop
+    ros::Rate r(10);
     while(ros::ok()) {
         //bag_launcher's loop function
         bag_launcher.check_all();
         ros::spinOnce();
+        r.sleep();
     }
 
 }
