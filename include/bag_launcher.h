@@ -106,6 +106,7 @@ namespace bag_launcher_node {
             double heartbeat_interval_;
             ros::Publisher name_publisher_;
             bool default_record_all_;
+            uint32_t queue_size_;
 
             std::map<std::string, std::shared_ptr<HeartBeat>> heartbeats_;
             std::map<std::string, std::shared_ptr<BagRecorder>> recorders_;

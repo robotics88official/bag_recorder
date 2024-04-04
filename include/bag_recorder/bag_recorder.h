@@ -113,6 +113,7 @@ namespace bag_recorder {
             bool                          recording_all_topics_;
             unsigned long long            min_recording_space_ = 1024 * 1024 * 1024;
             std::string                   min_recording_space_str_ = "1G";
+            uint64_t                      buffer_size_ = 1048576 * 256;
 
             //bag_ data
             rosbag::Bag                   bag_;
@@ -139,6 +140,8 @@ namespace bag_recorder {
             boost::condition_variable_any queue_condition_;
             boost::mutex                  queue_mutex_;
             std::queue<OutgoingMessage>*  message_queue_;                //!< queue for storing
+
+            uint64_t                      queue_size_ = 0;
 
             boost::thread                 record_thread_;
 

@@ -151,6 +151,7 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
     bag_filename_ = unique_folder + "/" + bag_name;
 
     message_queue_ = new std::queue<OutgoingMessage>;
+    queue_size_ = 0;
 
     //test for asterisk to subscribe all topics
     foreach(string const& topic, topics) {
@@ -360,7 +361,19 @@ void BagRecorder::subscriber_callback(const ros::MessageEvent<topic_tools::Shape
     { //writes message to queue
         boost::mutex::scoped_lock queue_lock(queue_mutex_);
         message_queue_->push(out);
+        queue_size_ += out.msg->size();
+
+        // Make sure we are not exceeding buffer size
+        while (buffer_size_ > 0 && queue_size_ > buffer_size_) {
+            OutgoingMessage drop = message_queue_->front();
+            message_queue_->pop();
+            queue_size_ -= drop.msg->size();
+
+            ROS_WARN_THROTTLE(5, "rosbag record buffer exceeded. Dropping oldest queued message.");
+        }
     }
+
+    
 
     //notify write thread
     queue_condition_.notify_all();
@@ -390,6 +403,7 @@ void BagRecorder::queue_processor() {
 
         bool finished = false;
         while (message_queue_->empty()) {
+
             //will finish if queue is empty and either stop_signal_ is recieved
             {
                 boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
@@ -424,7 +438,6 @@ void BagRecorder::queue_processor() {
             queue_condition_.timed_wait(queue_lock, xt);
             if (check_duration(ros::Time::now()))
             {
-                finished = true;
                 break;
             }
         }
@@ -438,8 +451,12 @@ void BagRecorder::queue_processor() {
         //if we get here queue is not empty, write next message to queue
         OutgoingMessage out = message_queue_->front();
         message_queue_->pop();
+        queue_size_ -= out.msg->size();
 
         queue_lock.release()->unlock();
+
+        // Check duration when queue is nonempty
+        check_duration(ros::Time::now());
 
         //perform safety checks before writing
         run_scheduled_checks();
@@ -477,6 +494,7 @@ bool BagRecorder::check_duration(const ros::Time& t)
             start_time_ += ros::Duration(split_bag_s_);
             start_writing();
         }
+        return true;
     }
     return false;
 }
