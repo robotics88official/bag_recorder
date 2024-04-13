@@ -136,7 +136,7 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
       bag_name.erase(ind);
     }
 
-    std::string unique_folder = data_folder_ + get_time_str();
+    std::string unique_folder = data_folder_ + "bag_" + get_time_str();
     boost::filesystem::create_directory(unique_folder);
 
     if(append_date_)
@@ -610,9 +610,9 @@ std::string BagRecorder::get_time_str()
 {
     std::stringstream msg;
     const boost::posix_time::ptime now=
-        boost::posix_time::second_clock::local_time();
+        boost::posix_time::second_clock::universal_time();
     boost::posix_time::time_facet *const f=
-        new boost::posix_time::time_facet("%Y-%m-%d-%H-%M-%S");
+        new boost::posix_time::time_facet("%Y-%m-%d_%H:%M:%S");
     msg.imbue(std::locale(msg.getloc(),f));
     msg << now;
     return msg.str();
