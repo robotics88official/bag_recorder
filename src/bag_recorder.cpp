@@ -612,7 +612,7 @@ std::string BagRecorder::get_time_str()
     const boost::posix_time::ptime now=
         boost::posix_time::second_clock::universal_time();
     boost::posix_time::time_facet *const f=
-        new boost::posix_time::time_facet("%Y-%m-%d_%H:%M:%S");
+        new boost::posix_time::time_facet("%Y-%m-%d_%H-%M-%S");
     msg.imbue(std::locale(msg.getloc(),f));
     msg << now;
     return msg.str();
