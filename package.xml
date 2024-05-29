@@ -25,7 +25,7 @@
   <run_depend>boost</run_depend>
   <run_depend>genmsg</run_depend>
   <run_depend>genpy</run_depend>
-  <run_depend>python-rospkg</run_depend>
+  <run_depend>python3-rospkg</run_depend>
   <run_depend>rosbag_storage</run_depend>
   <run_depend>rosconsole</run_depend>
   <run_depend>roscpp</run_depend>
