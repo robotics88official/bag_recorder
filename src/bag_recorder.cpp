@@ -108,8 +108,10 @@ BagRecorder::BagRecorder(std::string data_folder, bool append_date):
 * @details stops recording immediately if currently recording
 */
 BagRecorder::~BagRecorder() {
-    if(is_active())
+    if(is_active()) {
+        ROS_WARN("Destructor called while recording is still active. Stopping recording.");
         immediate_stop_recording();
+    }
     delete message_queue_;
 }
 
@@ -193,23 +195,28 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
 * @details gets start/stop mutex, sets stop flag, kills subscribers
 */
 void BagRecorder::stop_recording() {
+    ROS_INFO("Initiating stop_recording.");
     boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
 
-    //if not recording then do nothing
-    if(!bag_active_)
+    if (!bag_active_) {
+        ROS_WARN("stop_recording called but no active recording found.");
         return;
+    }
 
     clear_queue_signal_ = true;
+    bag_active_ = false;
 
-    //note that start_stop_lock is acting as a lock for both subscribers_
-    //and also for subscribed_topics_
-    foreach( boost::shared_ptr<ros::Subscriber> sub, subscribers_ )
+    foreach (boost::shared_ptr<ros::Subscriber> sub, subscribers_) {
         sub->shutdown();
-
+        ROS_INFO("Shut down subscriber to topic.");
+    }
+    subscribers_.clear();
     subscribed_topics_.clear();
 
-    ROS_INFO("Stopping BagRecorder, clearing queue.");
-} // stop_recording()
+    ROS_INFO("Subscribers shut down, signaling queue to clear and stop writing.");
+    stop_writing();
+}
+
 
 void BagRecorder::start_writing() {
     // Open bag_ file for writing
@@ -229,10 +236,21 @@ void BagRecorder::start_writing() {
 }
 
 void BagRecorder::stop_writing() {
-    ROS_INFO("Closing %s.", bag_filename_.c_str());
-    bag_.close();
-    rename((bag_filename_ + string(".active")).c_str(), bag_filename_.c_str());
+    try {
+        ROS_INFO("Attempting to close the bag file: %s.", bag_filename_.c_str());
+        bag_.close();
+        std::string active_filename = bag_filename_ + ".active";
+        std::string final_filename = bag_filename_;
+        if (rename(active_filename.c_str(), final_filename.c_str()) == 0) {
+            ROS_INFO("Successfully renamed the bag file from %s to %s.", active_filename.c_str(), final_filename.c_str());
+        } else {
+            ROS_ERROR("Failed to rename the bag file from %s to %s.", active_filename.c_str(), final_filename.c_str());
+        }
+    } catch (const std::exception& e) {
+        ROS_ERROR("Exception caught while closing the bag file: %s", e.what());
+    }
 }
+
 
 /**
 * @brief immediate_stop_recording() stops the bag immediately
@@ -250,11 +268,13 @@ void BagRecorder::immediate_stop_recording() {
         return;
 
     stop_signal_ = true;
+    stop_writing();
 
     foreach( boost::shared_ptr<ros::Subscriber> sub, subscribers_ )
         sub->shutdown();
 
     subscribed_topics_.clear();
+    subscribers_.clear();
 
     ROS_INFO("Stopping BagRecorder immediately.");
 } // immediate_stop_recording()

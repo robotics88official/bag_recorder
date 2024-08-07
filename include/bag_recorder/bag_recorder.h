@@ -52,6 +52,7 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <atomic>
 
 namespace bag_recorder {
 
@@ -118,7 +119,8 @@ namespace bag_recorder {
             //bag_ data
             rosbag::Bag                   bag_;
             std::string                   bag_filename_ = ""; //initialized in cas get_bagname is called
-            bool                          bag_active_ = false; //is by default not active
+            // bool                          bag_active_ = false; //is by default not active
+            std::atomic<bool> bag_active_{false};
 
             // time/splits
             ros::Time                     start_time_;
