@@ -1,0 +1,4 @@
+<launch>
+    <test test-name="test_multithreading" pkg="bag_recorder" type="test_multithreading" />
+    <node name="rosbag_recorder_node" pkg="bag_recorder" type="rosbag_recorder_node" output="screen" />
+</launch>

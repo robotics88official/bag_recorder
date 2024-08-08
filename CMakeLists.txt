@@ -43,6 +43,14 @@ target_link_libraries(bag_recorder_node
 add_dependencies(${PROJECT_NAME}_node ${PROJECT_NAME}_generate_messages_cpp)
 
 
+# if(CATKIN_ENABLE_TESTING)
+#     find_package(rostest REQUIRED)
+#     find_package(GTest REQUIRED)
+#     add_rostest_gtest(test_multithreading
+#                       test/test_multithreading.test
+#                       test/test_multithreading.cpp)
+#     target_link_libraries(test_multithreading ${catkin_LIBRARIES})
+# endif()
 
 # Install stuff
 install(DIRECTORY include/${PROJECT_NAME}/

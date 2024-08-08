@@ -126,8 +126,11 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
     boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
 
     //will not start new bag_ if there is an active bag_ already
-    if(bag_active_)
+    if(bag_active_){
+        std::cout << "will not start new bag_ if there is an active bag_ already----------\n";
         return "";
+    }
+    std::cout << "start_recording bad_not active thats good\n";
     bag_active_ = true;
     stop_signal_ = false;
     clear_queue_signal_ = false;
@@ -210,11 +213,11 @@ void BagRecorder::stop_recording() {
         sub->shutdown();
         ROS_INFO("Shut down subscriber to topic.");
     }
-    subscribers_.clear();
+    // subscribers_.clear();
     subscribed_topics_.clear();
 
     ROS_INFO("Subscribers shut down, signaling queue to clear and stop writing.");
-    stop_writing();
+    // stop_writing();
 }
 
 
@@ -268,13 +271,13 @@ void BagRecorder::immediate_stop_recording() {
         return;
 
     stop_signal_ = true;
-    stop_writing();
+    // stop_writing();
 
     foreach( boost::shared_ptr<ros::Subscriber> sub, subscribers_ )
         sub->shutdown();
 
     subscribed_topics_.clear();
-    subscribers_.clear();
+    // subscribers_.clear();
 
     ROS_INFO("Stopping BagRecorder immediately.");
 } // immediate_stop_recording()

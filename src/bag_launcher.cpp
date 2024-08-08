@@ -62,6 +62,7 @@ BagLauncher::~BagLauncher(){
 * publishes bag name if enabled.
 */
 void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
+    std::cout << "start recordingggg**&&&&&&&&&&&\n";
     //find the recorder under that name if it exists already
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->config);
     data_folder_ = msg->data_dir;
@@ -76,11 +77,11 @@ void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
         recorders_[msg->config] = new_recorder;
     }
 
-    //make sure bag is not active.
-    if(recorders_[msg->config]->is_active()) {
-        ROS_WARN("Bag configuration %s is already recording to %s.", msg->config.c_str(), recorders_[msg->config]->get_bagname().c_str());
-        return;
-    }
+    // //make sure bag is not active.
+    // if(recorders_[msg->config]->is_active()) {
+    //     ROS_WARN("Bag configuration %s is already recording to %s.", msg->config.c_str(), recorders_[msg->config]->get_bagname().c_str());
+    //     return;
+    // }
 
     //start recording
     std::vector<std::string> topics;
@@ -134,6 +135,7 @@ void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
 * @details finds recorder in map by config name, stops it
 */
 void BagLauncher::Stop_Recording(const std_msgs::String::ConstPtr& msg){
+    std::cout << "stop recording entered**************\n";
     //find recorder in map
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->data);
 
@@ -143,9 +145,9 @@ void BagLauncher::Stop_Recording(const std_msgs::String::ConstPtr& msg){
     if(recorder != recorders_.end()) {
         //stop the bag
         recorder->second->stop_recording();
-        ROS_INFO("%s configuration recorder stopped.", msg->data.c_str());
+        ROS_INFO("%s configuration recorder stopped *******************.", msg->data.c_str());
     } else {
-        ROS_INFO("%s configuration recorder did not exist.", msg->data.c_str());
+        ROS_INFO("%s configuration recorder did not exist. **************", msg->data.c_str());
     }
 
     if(publish_heartbeat_) {
