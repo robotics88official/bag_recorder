@@ -86,7 +86,7 @@ namespace bag_launcher_node {
             BagLauncher(ros::NodeHandle nh, BLOptions options);
             ~BagLauncher();
 
-            void check_all();
+            void check_all(const ros::TimerEvent&);
 
         private:
             void Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg);
@@ -107,6 +107,7 @@ namespace bag_launcher_node {
             ros::Publisher name_publisher_;
             bool default_record_all_;
             uint32_t queue_size_;
+            ros::Timer timer_;
 
             std::map<std::string, std::shared_ptr<HeartBeat>> heartbeats_;
             std::map<std::string, std::shared_ptr<BagRecorder>> recorders_;

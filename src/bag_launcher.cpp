@@ -43,6 +43,8 @@ BagLauncher::BagLauncher(ros::NodeHandle nh, BLOptions options):
     if(options.publish_name) {
         name_publisher_ = nh.advertise<bag_recorder::Rosbag>(sanitize_topic(options.name_topic), 5);
     }
+    // Set up the timer to call check_all every 0.5 secs
+    timer_ = nh.createTimer(ros::Duration(0.5), &BagLauncher::check_all, this);
 }
 
 /**
@@ -62,11 +64,9 @@ BagLauncher::~BagLauncher(){
 * publishes bag name if enabled.
 */
 void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
-    std::cout << "start recordingggg**&&&&&&&&&&&\n";
     //find the recorder under that name if it exists already
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->config);
     data_folder_ = msg->data_dir;
-    std::cout << "data dir being recorded to: " << msg->data_dir << std::endl; 
     if (!boost::filesystem::exists(data_folder_)) {
         ROS_INFO("Folder did not exist, creating directory: %s", data_folder_.c_str());
         boost::filesystem::create_directories(data_folder_);
@@ -78,14 +78,7 @@ void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
         recorders_[msg->config] = new_recorder;
     }
 
-    //make sure bag is not active.
-    // if(recorders_[msg->config]->is_active()) {
-    //     ROS_WARN("Bag configuration %s is already recording to %s.", msg->config.c_str(), recorders_[msg->config]->get_bagname().c_str());
-    //     return;
-    // }
-
     //start recording
-    std::cout << "started recording in the data dir^^^^^^^^^^^^\n";
     std::vector<std::string> topics;
     std::string full_bag_name = "";
     if(load_config(msg->config, topics)) {
@@ -137,7 +130,6 @@ void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
 * @details finds recorder in map by config name, stops it
 */
 void BagLauncher::Stop_Recording(const std_msgs::String::ConstPtr& msg){
-    std::cout << "stop recording entered**************\n";
     //find recorder in map
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->data);
 
@@ -147,9 +139,9 @@ void BagLauncher::Stop_Recording(const std_msgs::String::ConstPtr& msg){
     if(recorder != recorders_.end()) {
         //stop the bag
         recorder->second->stop_recording();
-        ROS_INFO("%s configuration recorder stopped *******************.", msg->data.c_str());
+        ROS_INFO("%s configuration recorder stopped.", msg->data.c_str());
     } else {
-        ROS_INFO("%s configuration recorder did not exist. **************", msg->data.c_str());
+        ROS_INFO("%s configuration recorder did not exist.", msg->data.c_str());
     }
 
     if(publish_heartbeat_) {
@@ -233,7 +225,7 @@ bool BagLauncher::load_config(std::string config_name, std::vector<std::string>&
 * @brief check_all() is called each loop to beat each of the hearts
 * @details iterates over all heartbeats and beats each of them
 */
-void BagLauncher::check_all() {
+void BagLauncher::check_all(const ros::TimerEvent&) {
     for(std::map<std::string, std::shared_ptr<HeartBeat>>::iterator it = heartbeats_.begin(); it != heartbeats_.end(); ++it)
         it->second->beat();
 } // check_all()

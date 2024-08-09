@@ -127,10 +127,8 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
 
     //will not start new bag_ if there is an active bag_ already
     if(bag_active_){
-        std::cout << "will not start new bag_ if there is an active bag_ already----------\n";
         return "";
     }
-    std::cout << "start_recording bad_not active thats good\n";
     bag_active_ = true;
     stop_signal_ = false;
     clear_queue_signal_ = false;
@@ -141,7 +139,6 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
       bag_name.erase(ind);
     }
 
-    std::cout << "data folder in start_recording which dhouls be correct: " << data_folder << std::endl;
     std::string unique_folder = data_folder + "bag_" + get_time_str();
     boost::filesystem::create_directory(unique_folder);
 
@@ -199,7 +196,6 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
 * @details gets start/stop mutex, sets stop flag, kills subscribers
 */
 void BagRecorder::stop_recording() {
-    ROS_INFO("Initiating stop_recording.");
     boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
 
     if (!bag_active_) {
@@ -214,11 +210,9 @@ void BagRecorder::stop_recording() {
         sub->shutdown();
         ROS_INFO("Shut down subscriber to topic.");
     }
-    // subscribers_.clear();
     subscribed_topics_.clear();
 
     ROS_INFO("Subscribers shut down, signaling queue to clear and stop writing.");
-    // stop_writing();
 }
 
 
