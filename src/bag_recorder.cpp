@@ -122,7 +122,7 @@ BagRecorder::~BagRecorder() {
 * @return full name of bag that will be recorded to
 * @details locks start/stop mutex, generates full bagname, starts bag, starts write thread
 */
-std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::string> topics, bool record_all_topics) {
+std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::string> topics, std::string data_folder, bool record_all_topics) {
     boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
 
     //will not start new bag_ if there is an active bag_ already
@@ -141,7 +141,8 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
       bag_name.erase(ind);
     }
 
-    std::string unique_folder = data_folder_ + "bag_" + get_time_str();
+    std::cout << "data folder in start_recording which dhouls be correct: " << data_folder << std::endl;
+    std::string unique_folder = data_folder + "bag_" + get_time_str();
     boost::filesystem::create_directory(unique_folder);
 
     if(append_date_)
@@ -271,13 +272,13 @@ void BagRecorder::immediate_stop_recording() {
         return;
 
     stop_signal_ = true;
-    // stop_writing();
+    stop_writing();
 
     foreach( boost::shared_ptr<ros::Subscriber> sub, subscribers_ )
         sub->shutdown();
 
     subscribed_topics_.clear();
-    // subscribers_.clear();
+    subscribers_.clear();
 
     ROS_INFO("Stopping BagRecorder immediately.");
 } // immediate_stop_recording()

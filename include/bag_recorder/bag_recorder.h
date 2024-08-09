@@ -75,7 +75,6 @@ namespace bag_recorder {
             ~BagRecorder();
 
             // flow control function - sets flags, starts threads, starts/kills subscribers
-            std::string start_recording(std::string bag__name, std::vector<std::string> topics, bool record_all_topics = false); //-- initializes subscribers starts record thread, initializes all record variables, generates bag_ name
             void stop_recording(); //-- kills subscribers, sets flag for write_thread to stop after queue is cleared
             void start_writing();
             void stop_writing();
@@ -119,8 +118,8 @@ namespace bag_recorder {
             //bag_ data
             rosbag::Bag                   bag_;
             std::string                   bag_filename_ = ""; //initialized in cas get_bagname is called
-            bool                          bag_active_ = false; //is by default not active
-            // std::atomic<bool> bag_active_{false};
+            // bool                          bag_active_ = false; //is by default not active
+            std::atomic<bool> bag_active_{false};
 
             // time/splits
             ros::Time                     start_time_;
@@ -156,6 +155,9 @@ namespace bag_recorder {
             //but I can't think of a better way to reveal these so...
             double                        subscribe_all_interval_ = 5.0;
             double                        check_disk_interval_ = 10.0;
+
+        public:
+            std::string start_recording(std::string bag__name, std::vector<std::string> topics, std::string data_folder, bool record_all_topics = false); //-- initializes subscribers starts record thread, initializes all record variables, generates bag_ name
     }; //BagRecorder
 
 } //bag_recorder

@@ -57,18 +57,18 @@ int main(int argc, char** argv) {
     BagLauncher bag_launcher(nh, options);
 
     // Use an asynchronous spinner to manage callbacks across multiple threads
-    // ros::AsyncSpinner spinner(1); // Use 4 threads
-    // spinner.start();
+    ros::AsyncSpinner spinner(1); // Use 4 threads
+    spinner.start();
 
     //main loop
     ros::Rate r(1000);
     while(ros::ok()) {
         //bag_launcher's loop function
-        ros::spinOnce();
+        // ros::spinOnce();
         bag_launcher.check_all();
         r.sleep();
     }
 
-    // ros::waitForShutdown();
-    // return 0;
+    ros::waitForShutdown();
+    return 0;
 }

@@ -66,6 +66,7 @@ void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
     //find the recorder under that name if it exists already
     std::map<std::string, std::shared_ptr<BagRecorder>>::iterator recorder = recorders_.find(msg->config);
     data_folder_ = msg->data_dir;
+    std::cout << "data dir being recorded to: " << msg->data_dir << std::endl; 
     if (!boost::filesystem::exists(data_folder_)) {
         ROS_INFO("Folder did not exist, creating directory: %s", data_folder_.c_str());
         boost::filesystem::create_directories(data_folder_);
@@ -77,17 +78,18 @@ void BagLauncher::Start_Recording(const bag_recorder::Rosbag::ConstPtr& msg){
         recorders_[msg->config] = new_recorder;
     }
 
-    // //make sure bag is not active.
+    //make sure bag is not active.
     // if(recorders_[msg->config]->is_active()) {
     //     ROS_WARN("Bag configuration %s is already recording to %s.", msg->config.c_str(), recorders_[msg->config]->get_bagname().c_str());
     //     return;
     // }
 
     //start recording
+    std::cout << "started recording in the data dir^^^^^^^^^^^^\n";
     std::vector<std::string> topics;
     std::string full_bag_name = "";
     if(load_config(msg->config, topics)) {
-        full_bag_name = recorders_[msg->config]->start_recording(msg->bag_name, topics);
+        full_bag_name = recorders_[msg->config]->start_recording(msg->bag_name, topics, msg->data_dir);
     } else {
         ROS_ERROR("No such config: %s, was able to be loaded from. Recorder not started.", msg->config.c_str());
         return;
