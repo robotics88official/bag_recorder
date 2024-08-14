@@ -1,8 +1,3 @@
-/// @file bag_launcher.cpp
-/// @author joshs333@live.com
-/// @details this is used as an overhead to the BagRecorder class. This operates
-/// as a ROS node and loads different configs for the BagRecorder and launches
-/// the bag recorder with this config and stops it by published command.
 #include "bag_launcher.h"
 #include "boost/filesystem.hpp" 
 #include <fstream>

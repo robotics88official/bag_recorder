@@ -1,71 +1,10 @@
-/*********************************************************************
-* Software License Agreement (BSD License)
-*
-*  Copyright (c) 2008, Willow Garage, Inc.
-*  All rights reserved.
-*
-*  Redistribution and use in source and binary forms, with or without
-*  modification, are permitted provided that the following conditions
-*  are met:
-*
-*   * Redistributions of source code must retain the above copyright
-*     notice, this list of conditions and the following disclaimer.
-*   * Redistributions in binary form must reproduce the above
-*     copyright notice, this list of conditions and the following
-*     disclaimer in the documentation and/or other materials provided
-*     with the distribution.
-*   * Neither the name of Willow Garage, Inc. nor the names of its
-*     contributors may be used to endorse or promote products derived
-*     from this software without specific prior written permission.
-*
-*  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-*  "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-*  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
-*  FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-*  COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-*  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
-*  BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-*  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-*  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-*  LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-*  ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-*  POSSIBILITY OF SUCH DAMAGE.
-********************************************************************/
-/// @file bag_recorder.cpp
-/// @brief generates a bag_recorder that subscribes to various topics and
-/// records it to a bag
-/// @contact joshs333@live.com
-/// @details this file is based heavily on the ROS bag recorder class, hence
-/// the header above. A few potential race conditions were removed from
-/// original modifications and it was also heavily restructured for simplicity
-/// and ease of use.
-///
-/// Original ROSBag Recorder: http://docs.ros.org/diamondback/api/rosbag/html/c++/classrosbag_1_1Recorder.html
-
-//Bulk of includes/ ROS
-#include <bag_recorder/bag_recorder.h>
-#include <std_msgs/String.h>
-#include <std_msgs/Empty.h>
-
-// Disk Checking
-#include <sys/stat.h>
-#include <boost/filesystem.hpp>
-// Boost filesystem v3 is default in 1.46.0 and above
-// Fallback to original posix code (*nix only) if this is not true
-#if BOOST_FILESYSTEM_VERSION < 3
-  #include <sys/statvfs.h>
-#endif
-#if !defined(_MSC_VER)
-  #include <termios.h>
-  #include <unistd.h>
-#endif
-
-// Boost
-#include <boost/foreach.hpp>
-#include <boost/thread/xtime.hpp>
-#include <boost/date_time/local_time/local_time.hpp>
-
-#define foreach BOOST_FOREACH
+#include "bag_launcher.h"
+#include <iostream>
+#include "rclcpp/rclcpp.hpp"
+#include "std_msgs/msg/string.hpp"
+#include <filesystem>
+#include <memory>
+#include <map>
 
 namespace bag_recorder {
 
@@ -94,7 +33,7 @@ BagRecorder::BagRecorder(std::string data_folder, bool append_date):
         return;
 
     if (!ros::Time::waitForValid(ros::WallDuration(2.0)))
-        ROS_WARN("/use_sim_time set to true and no clock published.  Still waiting for valid time...");
+        RCLCPP_WARN(this->get_logger(), "/use_sim_time set to true and no clock published.  Still waiting for valid time...");
 
     ros::Time::waitForValid();
 
@@ -121,7 +60,7 @@ BagRecorder::~BagRecorder() {
 * @details locks start/stop mutex, generates full bagname, starts bag, starts write thread
 */
 std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::string> topics, bool record_all_topics) {
-    boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+    std::lock_guard<std::mutex> start_stop_lock(start_stop_mutex_);
 
     //will not start new bag_ if there is an active bag_ already
     if(bag_active_)
@@ -143,7 +82,7 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
         bag_name += string("_") + get_time_str();
 
     if (bag_name.length() == 0) {
-        ROS_ERROR("Bag Name has length 0. Unable to record.");
+        RCLCPP_ERROR(this->get_logger(), "Bag Name has length 0. Unable to record.");
         return "";
     }
 
@@ -171,11 +110,11 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
                 try {
                     subscribers_.push_back(generate_subscriber(topic));
                 } catch(ros::InvalidNameException) {
-                    ROS_ERROR("Invalid topic name: %s, no subscriber generated.", topic.c_str());
+                    RCLCPP_ERROR(this->get_logger(), "Invalid topic name: %s, no subscriber generated.", msg->config.c_str());
                 }
             }
     } else {
-        ROS_ERROR("No Topics Supplied to be recorded. Aborting bag %s.", bag_name.c_str());
+        RCLCPP_ERROR(this->get_logger(), "No Topics Supplied to be recorded. Aborting bag %s.", msg->config.c_str());
         return "";
     }
     start_time_ = ros::Time::now();
@@ -193,46 +132,47 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
 * @details gets start/stop mutex, sets stop flag, kills subscribers
 */
 void BagRecorder::stop_recording() {
-    boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+        std::lock_guard<std::mutex> start_stop_lock(start_stop_mutex_);
 
-    //if not recording then do nothing
-    if(!bag_active_)
-        return;
+        // If not recording then do nothing
+        if (!bag_active_)
+            return;
 
-    clear_queue_signal_ = true;
+        clear_queue_signal_ = true;
 
     //note that start_stop_lock is acting as a lock for both subscribers_
     //and also for subscribed_topics_
-    foreach( boost::shared_ptr<ros::Subscriber> sub, subscribers_ )
-        sub->shutdown();
+        for (auto &sub : subscribers_) {
+            sub.reset();
+        }
 
-    subscribed_topics_.clear();
+        subscribed_topics_.clear();
 
-    ROS_INFO("Stopping BagRecorder, clearing queue.");
-} // stop_recording()
+        RCLCPP_INFO(this->get_logger(), "Stopping BagRecorder, clearing queue.");
+    } // stop_recording()
 
 void BagRecorder::start_writing() {
     // Open bag_ file for writing
     // This got moved here from queue_processor so all the errors that would
     // cause the bag not to start would be in here.
-    bag_.setCompression(rosbag::compression::Uncompressed);
-    bag_.setChunkThreshold(1024 * 768);
+    bag_.set_compression(rosbag2_compression::COMPRESSION_NONE);
+    bag_.set_storage_options({bag_filename_ + ".active", 1024 * 768});
 
     try {
-        bag_.open(bag_filename_ + string(".active"), rosbag::bagmode::Write);
-    }
-    catch (rosbag::BagException e) {
-        //needs the mutex because the start functions read bag_active_
-        ROS_ERROR("Error writing: %s", e.what());
+        bag_.open();
+    } catch (const std::runtime_error &e) {
+        RCLCPP_ERROR(this->get_logger(), "Error writing: %s", e.what());
         bag_active_ = false;
     }
 }
 
+
 void BagRecorder::stop_writing() {
-    ROS_INFO("Closing %s.", bag_filename_.c_str());
+    RCLCPP_INFO(this->get_logger(), "Closing %s.", bag_filename_.c_str());
     bag_.close();
-    rename((bag_filename_ + string(".active")).c_str(), bag_filename_.c_str());
+    rcpputils::fs::rename(rcpputils::fs::path(bag_filename_ + ".active"), rcpputils::fs::path(bag_filename_));
 }
+
 
 /**
 * @brief immediate_stop_recording() stops the bag immediately
@@ -243,21 +183,23 @@ void BagRecorder::stop_writing() {
 void BagRecorder::immediate_stop_recording() {
     //needs the mutex because the stop signals and subscibers can be accessed
     //by the write thread
-    boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+    std::lock_guard<std::mutex> start_stop_lock(start_stop_mutex_);
 
     //if not writing then do nothing.
-    if(!bag_active_)
+    if (!bag_active_)
         return;
 
     stop_signal_ = true;
 
-    foreach( boost::shared_ptr<ros::Subscriber> sub, subscribers_ )
-        sub->shutdown();
+    for (auto &sub : subscribers_) {
+        sub.reset();
+    }
 
     subscribed_topics_.clear();
 
-    ROS_INFO("Stopping BagRecorder immediately.");
+    RCLCPP_INFO(this->get_logger(), "Stopping BagRecorder immediately.");
 } // immediate_stop_recording()
+
 
 /**
 * @brief is_active() tells if a bag is currently being recorded to
@@ -265,7 +207,7 @@ void BagRecorder::immediate_stop_recording() {
 * @return true if currently recording, false if not
 */
 bool BagRecorder::is_active() {
-    boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+    std::lock_guard<std::mutex> start_stop_lock(start_stop_mutex_);
     return bag_active_;
 } // is_active()
 
@@ -276,6 +218,7 @@ bool BagRecorder::is_active() {
 * currently recording
 */
 std::string BagRecorder::get_bagname() {
+    std::lock_guard<std::mutex> lock(start_stop_mutex_);
     return bag_filename_;
 }
 
@@ -286,13 +229,15 @@ std::string BagRecorder::get_bagname() {
 * 5 seconds if checks_failed_ is false
 */
 bool BagRecorder::can_log() {
+    std::lock_guard<std::mutex> lock(start_stop_mutex_);
     if (!checks_failed_)
         return true;
 
     //sends warning every 5 seconds if this is called continuously
-    if (ros::WallTime::now() >= warn_next_) {
-        warn_next_ += ros::WallDuration().fromSec(5.0);
-        ROS_WARN("Not logging message because logging disabled.  Most likely cause is a full disk.");
+    rclcpp::Time now = this->get_clock()->now();
+    if (now >= warn_next_) {
+        warn_next_ += rclcpp::Duration::from_seconds(5.0);
+        RCLCPP_WARN(this->get_logger(), "Not logging message because logging disabled. Most likely cause is a full disk.");
     }
     return false;
 } // can_log()
@@ -306,7 +251,7 @@ bool BagRecorder::can_log() {
 bool BagRecorder::is_subscribed_to(std::string topic) {
     //all calls to subscribed_topics_ is already protected by the start/stop
     //mutex so I'll just use that here instead of making another call
-    boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+    std::lock_guard<std::mutex> lock(start_stop_mutex_);
     return (subscribed_topics_.find(topic) != subscribed_topics_.end());
 } // is_subscribed_to()
 
@@ -315,26 +260,27 @@ bool BagRecorder::is_subscribed_to(std::string topic) {
 * @param [in] topic topic that the subscriber will be generated for
 * @return returns a boost shared_ptr to a ros subscriber
 */
-shared_ptr<ros::Subscriber> BagRecorder::generate_subscriber(string const& topic) {
-	ROS_DEBUG("Subscribing to %s", topic.c_str());
+rclcpp::Subscription<rclcpp::msg::Message>::SharedPtr BagRecorder::generate_subscriber(const std::string& topic) {
+    RCLCPP_DEBUG(this->get_logger(), "Subscribing to %s", topic.c_str());
 
-    ros::NodeHandle nh;
-    shared_ptr<int> count(boost::make_shared<int>(0));
-    shared_ptr<ros::Subscriber> sub(boost::make_shared<ros::Subscriber>());
+    //! this
+    // auto sub = this->create_subscription<rclcpp::msg::Message>(
+    //     topic,
+    //     100,
+    //     std::bind(&BagRecorder::subscriber_callback, this, std::placeholders::_1, topic));
 
-    ros::SubscribeOptions ops;
-    ops.topic = topic;
-    ops.queue_size = 100;
-    ops.md5sum = ros::message_traits::md5sum<topic_tools::ShapeShifter>();
-    ops.datatype = ros::message_traits::datatype<topic_tools::ShapeShifter>();
-    //lol what a line of code! #C++templates_rock!
-    ops.helper = boost::make_shared<ros::SubscriptionCallbackHelperT<
-        const ros::MessageEvent<topic_tools::ShapeShifter const> &> >(
-            boost::bind(&BagRecorder::subscriber_callback, this, _1, topic, sub, count));
-    *sub = nh.subscribe(ops);
+    // ros::SubscribeOptions ops;
+    // ops.topic = topic;
+    // ops.queue_size = 100;
+    // ops.md5sum = ros::message_traits::md5sum<topic_tools::ShapeShifter>();
+    // ops.datatype = ros::message_traits::datatype<topic_tools::ShapeShifter>();
+    // //lol what a line of code! #C++templates_rock!
+    // ops.helper = boost::make_shared<ros::SubscriptionCallbackHelperT<
+    //     const ros::MessageEvent<topic_tools::ShapeShifter const> &> >(
+    //         boost::bind(&BagRecorder::subscriber_callback, this, _1, topic, sub, count));
+    // *sub = nh.subscribe(ops);
 
-
-    ROS_INFO("Subscribing to topic: %s", topic.c_str());
+    RCLCPP_INFO(this->get_logger(), "Subscribing to topic: %s", topic.c_str());
     subscribed_topics_.insert(topic);
 
     return sub;
@@ -348,34 +294,24 @@ shared_ptr<ros::Subscriber> BagRecorder::generate_subscriber(string const& topic
 * @param [count] pointer to an in, fills template requirements but not used
 * @details turns a message into and OutgoingMessage and adds it to the queue to be written.
 */
-void BagRecorder::subscriber_callback(const ros::MessageEvent<topic_tools::ShapeShifter const>& msg_event, string const& topic, shared_ptr<ros::Subscriber> subscriber, shared_ptr<int> count) {
-    //These do nothing, but fill the template requirements
-    (void)subscriber;
-    (void)count;
+void BagRecorder::subscriber_callback(const rclcpp::msg::Message::SharedPtr msg, const std::string& topic) {
+    rclcpp::Time rectime = this->get_clock()->now();
 
-    Time rectime = Time::now();
+    // OutgoingMessage out(topic, msg_event.getMessage(), msg_event.getConnectionHeaderPtr(), rectime); // ros1
+    OutgoingMessage out(topic, msg, rectime); //!ros2??
 
-    //generates new outgoing message
-    OutgoingMessage out(topic, msg_event.getMessage(), msg_event.getConnectionHeaderPtr(), rectime);
+    std::lock_guard<std::mutex> queue_lock(queue_mutex_);
+    message_queue_.push(out);
+    queue_size_ += out.msg->size();
 
-    { //writes message to queue
-        boost::mutex::scoped_lock queue_lock(queue_mutex_);
-        message_queue_->push(out);
-        queue_size_ += out.msg->size();
+    while (buffer_size_ > 0 && queue_size_ > buffer_size_) {
+        OutgoingMessage drop = message_queue_.front();
+        message_queue_.pop();
+        queue_size_ -= drop.msg->size();
 
-        // Make sure we are not exceeding buffer size
-        while (buffer_size_ > 0 && queue_size_ > buffer_size_) {
-            OutgoingMessage drop = message_queue_->front();
-            message_queue_->pop();
-            queue_size_ -= drop.msg->size();
-
-            ROS_WARN_THROTTLE(5, "rosbag record buffer exceeded. Dropping oldest queued message.");
-        }
+        RCLCPP_WARN_THROTTLE(this->get_logger(), 5, "rosbag2 record buffer exceeded. Dropping oldest queued message.");
     }
 
-    
-
-    //notify write thread
     queue_condition_.notify_all();
 } // subscriber_callback()
 
@@ -384,79 +320,64 @@ void BagRecorder::subscriber_callback(const ros::MessageEvent<topic_tools::Shape
 * @details Primary loop locks queue to pull outgoing messages to write to the bag.
 * Also locks start/stop variables to see if it needs to stop. Runs scheduled checks.
 */
+
+
 void BagRecorder::queue_processor() {
-    ROS_INFO("Recording to %s.", bag_filename_.c_str());
+    RCLCPP_INFO(this->get_logger(), "Recording to %s.", bag_filename_.c_str());
 
     // schedule checks now that write queue is running
-    warn_next_ = ros::WallTime();
-    check_disk_next_ = ros::WallTime::now() + ros::WallDuration().fromSec(check_disk_interval_);
-    subscribe_all_next_ = ros::WallTime::now() + ros::WallDuration().fromSec(subscribe_all_interval_);
+    warn_next_ = rclcpp::Time(); // from WallTime ros1 to Time ros2
+    check_disk_next_ = this->now() + rclcpp::Duration::from_seconds(check_disk_interval_);
+    subscribe_all_next_ = this->now() + rclcpp::Duration::from_seconds(subscribe_all_interval_);
     check_disk();
-    //note we do not need to run subscribe all because it was run during the start bag
+    // note we do not need to run subscribe all because it was run during the start bag
 
     // Technically the queue_mutex_ should be locked while checking empty.
     // Except it should only get checked if the node is not ok, and thus
     // it shouldn't be in contention.
-    ros::NodeHandle nh;
-    while ((nh.ok() || !message_queue_->empty())) {
-        boost::unique_lock<boost::mutex> queue_lock(queue_mutex_);
+    while (rclcpp::ok() || !message_queue_->empty()) {
+        std::unique_lock<std::mutex> queue_lock(queue_mutex_);
 
         bool finished = false;
         while (message_queue_->empty()) {
 
-            //will finish if queue is empty and either stop_signal_ is recieved
-            {
-                boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
-                if(stop_signal_ || clear_queue_signal_) {
-                    finished = true;
-                    break;
-                }
-            }
-
-            //will finish if queue is empty and ros has issues
-            if (!nh.ok()) {
-                queue_lock.release()->unlock();
+            std::scoped_lock<std::mutex> start_stop_lock(start_stop_mutex_);
+            if(stop_signal_ || clear_queue_signal_) {
                 finished = true;
                 break;
             }
 
+            if (!rclcpp::ok()) {
+                queue_lock.unlock();
+                finished = true;
+                break;
+            }
             //even if queue is empty we want to run checks
             //so this way we can subscribe to other topics
             run_scheduled_checks();
 
-            //do not get stuck in loop
-            boost::xtime xt;
-            #if BOOST_VERSION >= 105000
-                boost::xtime_get(&xt, boost::TIME_UTC_);
-            #else
-                boost::xtime_get(&xt, boost::TIME_UTC);
-            #endif
-            xt.nsec += 250000000;
-            //check every 1/4th second if queue is empty or end condition
-            //note that the timed_wait function unlocks queue_lock
-            //so other threads can write to the queue
-            queue_condition_.timed_wait(queue_lock, xt);
-            if (check_duration(ros::Time::now()))
-            {
+            queue_lock.unlock();
+            rclcpp::sleep_for(std::chrono::milliseconds(250));  // sleep for 1/4 second
+            queue_lock.lock();
+            if (check_duration(this->now())) {
                 break;
             }
         }
         //if finished flag is set to true stop recording or stop_signal_ recieved
         {
-            boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+            std::scoped_lock<std::mutex> start_stop_lock(start_stop_mutex_);
             if (finished || stop_signal_)
                 break;
         }
 
-        //if we get here queue is not empty, write next message to queue
         OutgoingMessage out = message_queue_->front();
         message_queue_->pop();
         queue_size_ -= out.msg->size();
 
-        queue_lock.release()->unlock();
+        queue_lock.unlock(); //! queue_lock.release()->unlock();
 
         // Check duration when queue is nonempty
-        check_duration(ros::Time::now());
+        check_duration(this->now());
 
         //perform safety checks before writing
         run_scheduled_checks();
@@ -467,31 +388,18 @@ void BagRecorder::queue_processor() {
     }
     stop_writing();
 
-    // do not need the mutex because the function killing subscribers has a mutex
-    // that holds the queue processor. So when we get here all subcribers are
-    // dead and nothing else is using the queue.
-    while(!message_queue_->empty()) message_queue_->pop();
-
-    //needs the mutex because the start functions read bag_active_
-    boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+    std::scoped_lock<std::mutex> start_stop_lock(start_stop_mutex_);
+    while (!message_queue_->empty()) message_queue_->pop();
     bag_active_ = false;
-} // queue_processor()
-
-void BagRecorder::updateFileName() {
-    int ind = bag_filename_.rfind("_");
-    bag_filename_ = bag_filename_.substr(0, ind) + "_" + std::to_string(split_count_) + ".bag";
 }
 
-bool BagRecorder::check_duration(const ros::Time& t)
-{
-    if (t - start_time_ > ros::Duration(split_bag_s_))
-    {
-        while (t - start_time_ > ros::Duration(split_bag_s_))
-        {
+bool BagRecorder::check_duration(const rclcpp::Time& t) {
+    if (t - start_time_ > rclcpp::Duration(split_bag_s_)) {
+        while (t - start_time_ > rclcpp::Duration(split_bag_s_)) {
             stop_writing();
             split_count_++;
             updateFileName();
-            start_time_ += ros::Duration(split_bag_s_);
+            start_time_ += rclcpp::Duration(split_bag_s_);
             start_writing();
         }
         return true;
@@ -499,27 +407,35 @@ bool BagRecorder::check_duration(const ros::Time& t)
     return false;
 }
 
+void BagRecorder::updateFileName() {
+    int ind = bag_filename_.rfind("_");
+    bag_filename_ = bag_filename_.substr(0, ind) + "_" + std::to_string(split_count_) + ".bag";
+}
+
+
 /**
 * @brief run_scheduled_checks() sees if a function is scheduled to run and runs it if so
 * @details runs both check_disk() and subscribe_all() depending on if they are configured to run and scheduled to.
 */
 void BagRecorder::run_scheduled_checks() {
-    if (ros::WallTime::now() < check_disk_next_) {
-        check_disk_next_ += ros::WallDuration().fromSec(check_disk_interval_);
+    rclcpp::Time now = this->now();
+
+    if (now < check_disk_next_) {
+        check_disk_next_ += rclcpp::Duration::from_seconds(check_disk_interval_);
         check_disk();
     }
 
     //if any of the stop signals were recieved will not run subscribe all
-    if(ros::WallTime::now() >= subscribe_all_next_) {
-        subscribe_all_next_ += ros::WallDuration().fromSec(subscribe_all_interval_);
+    if (now >= subscribe_all_next_) {
+        subscribe_all_next_ += rclcpp::Duration::from_seconds(subscribe_all_interval_);
 
-        boost::mutex::scoped_lock start_stop_lock(start_stop_mutex_);
+        std::scoped_lock<std::mutex> start_stop_lock(start_stop_mutex_);
 
-        if(!(stop_signal_ || clear_queue_signal_) && recording_all_topics_) {
+        if (!(stop_signal_ || clear_queue_signal_) && recording_all_topics_) {
             subscribe_all();
         }
     }
-} // run_scheduled_checks()
+}
 
 /**
 * @brief subscribe_all() subscribes to all topics known to master
@@ -529,93 +445,61 @@ void BagRecorder::subscribe_all() {
     //does not call a mutex because all calls to subscribe_all
     //have the mutex already.
     //gets topic info, subscribes to any not already subscribed to
-    ros::master::V_TopicInfo topics;
-    if (ros::master::getTopics(topics)) {
-        foreach(ros::master::TopicInfo const& t, topics) {
-            //note that this doesn't use is_subscribed_to because
-            //is_subscribed_to wants a mutex we already have
-            if (subscribed_topics_.find(t.name) == subscribed_topics_.end())
+    std::vector<rclcpp::TopicInfo> topics;
+    if (this->get_topic_names_and_types(topics)) {
+        for (const auto& t : topics) {
+            if (subscribed_topics_.find(t.name) == subscribed_topics_.end()) {
                 subscribers_.push_back(generate_subscriber(t.name));
+            }
         }
     }
-} // subscribe_all()
+}
 
 /**
 * @brief check_disk() performs various checks on the disk to make sure it is safe to write
 * @details Uses statvfs if BOOST version < 3, else uses boost. Sets class
 * variable checks_failed_ to true or false depending on results.
 */
+//! might need to cross check this function
 void BagRecorder::check_disk() {
-#if BOOST_FILESYSTEM_VERSION < 3
-    struct statvfs fiData;
-    if ((statvfs(bag_.getFileName().c_str(), &fiData)) < 0)
-    {
-        ROS_WARN("Failed to check filesystem stats.");
-        return;
-    }
-    unsigned long long free_space = 0;
-    free_space = (unsigned long long) (fiData.f_bsize) * (unsigned long long) (fiData.f_bavail);
-    if (free_space < min_recording_space_)
-    {
-        ROS_ERROR("Less than %s of space free on disk with %s.  Disabling recording.", min_recording_space_str_.c_str(), bag_.getFileName().c_str());
-        checks_failed_ = true;
-        return;
-    }
-    else if (free_space < 5 * min_recording_space_)
-    {
-        ROS_WARN("Less than 5 x %s of space free on disk with %s.", min_recording_space_str_.c_str(), bag_.getFileName().c_str());
-    }
-    else
-    {
-        checks_failed_ = false;
-    }
-#else
-    boost::filesystem::path p(boost::filesystem::system_complete(bag_.getFileName().c_str()));
+    std::filesystem::path p = std::filesystem::absolute(bag_filename_);
     p = p.parent_path();
-    boost::filesystem::space_info info;
-    try
-    {
-        info = boost::filesystem::space(p);
-    }
-    catch (boost::filesystem::filesystem_error &e)
-    {
-        ROS_WARN("Failed to check filesystem stats [%s].", e.what());
+    std::filesystem::space_info info;
+    try {
+        info = std::filesystem::space(p);
+    } catch (const std::filesystem::filesystem_error& e) {
+        RCLCPP_WARN(this->get_logger(), "Failed to check filesystem stats [%s].", e.what());
         checks_failed_ = true;
         return;
     }
-    if ( info.available < min_recording_space_)
-    {
-        ROS_ERROR("Less than %s of space free on disk with %s.  Disabling recording.", min_recording_space_str_.c_str(), bag_.getFileName().c_str());
+
+    if (info.available < min_recording_space_) {
+        RCLCPP_ERROR(this->get_logger(), "Less than %s of space free on disk with %s. Disabling recording.",
+                        min_recording_space_str_.c_str(), bag_filename_.c_str());
         checks_failed_ = true;
         return;
-    }
-    else if (info.available < 5 * min_recording_space_)
-    {
-        ROS_WARN("Less than 5 x %s of space free on disk with %s.", min_recording_space_str_.c_str(), bag_.getFileName().c_str());
+    } else if (info.available < 5 * min_recording_space_) {
+        RCLCPP_WARN(this->get_logger(), "Less than 5 x %s of space free on disk with %s.", min_recording_space_str_.c_str(), bag_filename_.c_str());
+    } else {
         checks_failed_ = false;
     }
-    else
-    {
-        checks_failed_ = false;
-    }
-#endif
-    return;
-} // check_disk()
+}
 
 /**
 * @brief get_time_str() returns a timestamp in string form
 * @return timestamp in form YYYY-MM-DD-HH-MM-SS
 */
-std::string BagRecorder::get_time_str()
-{
+std::string BagRecorder::get_time_str() {
+    //  const boost::posix_time::ptime now=
+    //     boost::posix_time::second_clock::universal_time();
+    // boost::posix_time::time_facet *const f=
+    //     new boost::posix_time::time_facet("%Y-%m-%d_%H-%M-%S");
+    // msg.imbue(std::locale(msg.getloc(),f));
+    // msg << now;
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_c = std::chrono::system_clock::to_time_t(now);
     std::stringstream msg;
-    const boost::posix_time::ptime now=
-        boost::posix_time::second_clock::universal_time();
-    boost::posix_time::time_facet *const f=
-        new boost::posix_time::time_facet("%Y-%m-%d_%H-%M-%S");
-    msg.imbue(std::locale(msg.getloc(),f));
-    msg << now;
+    msg << std::put_time(std::localtime(&now_c), "%Y-%m-%d_%H-%M-%S");
     return msg.str();
-} // get_time_str()
-
+}
 } // bag_recorder

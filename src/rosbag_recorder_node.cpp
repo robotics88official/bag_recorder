@@ -1,68 +1,69 @@
-#include <ros/ros.h>
+#include "rclcpp/rclcpp.hpp"
 #include "bag_launcher.h"
 
 using namespace bag_launcher_node;
 
 int main(int argc, char** argv) {
-    //initialize node
-    ros::init(argc, argv, "rosbag_recorder_node");
-    ros::NodeHandle nh("~");
+    // Initialize ROS 2 node
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("rosbag_recorder_node");
 
     BLOptions options;
 
-    //load param strings with no default value
-    if(!nh.getParam("configuration_directory", options.configuration_directory)) {
-        ROS_ERROR("Unable to start Bag Recorder Node. No configuration directory supplied.");
-        return 0;
-    }
-    if(!nh.getParam("data_directory", options.data_directory)) {
-        ROS_ERROR("Unable to start Bag Recorder Node. No data directory supplied.");
+    // Load parameter strings with no default value
+    node->declare_parameter("configuration_directory");
+    if (!node->get_parameter("configuration_directory", options.configuration_directory)) {
+        RCLCPP_ERROR(node->get_logger(), "Unable to start Bag Recorder Node. No configuration directory supplied.");
         return 0;
     }
 
-    //load param strings with default values
-    nh.param<std::string>("start_bag_topic",    options.record_start_topic, "/recorder/start");
-    nh.param<std::string>("stop_bag_topic",     options.record_stop_topic,  "/recorder/stop");
-    nh.param<std::string>("name_topic",         options.name_topic,         "/recorder/bag_name");
-    nh.param<std::string>("heartbeat_topic",    options.heartbeat_topic,    "/recorder/heartbeat");
+    node->declare_parameter("data_directory");
+    if (!node->get_parameter("data_directory", options.data_directory)) {
+        RCLCPP_ERROR(node->get_logger(), "Unable to start Bag Recorder Node. No data directory supplied.");
+        return 0;
+    }
 
-    //load bool params
-    nh.param<bool>("publish_name",              options.publish_name,       true);
-    nh.param<bool>("publish_heartbeat",         options.publish_heartbeat,  true);
-    nh.param<bool>("default_record_all",        options.default_record_all, false);
+    // Load param strings with default values
+    options.record_start_topic = node->declare_parameter("start_bag_topic", "/recorder/start");
+    options.record_stop_topic = node->declare_parameter("stop_bag_topic", "/recorder/stop");
+    options.name_topic = node->declare_parameter("name_topic", "/recorder/bag_name");
+    options.heartbeat_topic = node->declare_parameter("heartbeat_topic", "/recorder/heartbeat");
 
-    //load double param
-    nh.param<double>("heartbeat_interval",      options.heartbeat_interval, 10);
+    // Load bool params
+    options.publish_name = node->declare_parameter("publish_name", true);
+    options.publish_heartbeat = node->declare_parameter("publish_heartbeat", true);
+    options.default_record_all = node->declare_parameter("default_record_all", false);
 
-    //assume we are running in unix and sanitize the directories
-    if(options.configuration_directory.substr(options.configuration_directory.length()-1) != "/")
+    // Load double param
+    options.heartbeat_interval = node->declare_parameter("heartbeat_interval", 10.0);
+
+    // Sanitize the directories
+    if (options.configuration_directory.back() != '/')
         options.configuration_directory += "/";
-    if(options.data_directory.substr(options.data_directory.length()-1) != "/")
+    if (options.data_directory.back() != '/')
         options.data_directory += "/";
 
-    //Print Configuration
-    ROS_INFO("[Bag Recorder] Launching.");
-    ROS_INFO("[Bag Recorder] Configurations located in %s.", options.configuration_directory.c_str());
-    ROS_INFO("[Bag Recorder] Data directory located at %s.", options.data_directory.c_str());
-    ROS_INFO("[Bag Recorder] Start Recording topic: %s.", options.record_start_topic.c_str());
-    ROS_INFO("[Bag Recorder] Stop Recording topic: %s.", options.record_stop_topic.c_str());
-    if(options.publish_name) {
-        ROS_INFO("[Bag Recorder] Publishing bag names to %s.", options.name_topic.c_str());
+    // Print Configuration
+    RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Launching.");
+    RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Configurations located in %s", options.configuration_directory.c_str());
+    RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Data directory located at %s", options.data_directory.c_str());
+    RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Start Recording topic: %s", options.record_start_topic.c_str());
+    RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Stop Recording topic: %s", options.record_stop_topic.c_str());
+    if (options.publish_name) {
+        RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Publishing bag names to %s", options.name_topic.c_str());
     }
-    if(options.publish_heartbeat) {
-        ROS_INFO("[Bag Recorder] Publishing heartbeat every %.2f seconds to %s.", options.heartbeat_interval, options.heartbeat_topic.c_str());
-    }
-
-    //Make Bag Launcher node
-    BagLauncher bag_launcher(nh, options);
-
-    //main loop
-    ros::Rate r(1000);
-    while(ros::ok()) {
-        //bag_launcher's loop function
-        bag_launcher.check_all();
-        ros::spinOnce();
-        r.sleep();
+    if (options.publish_heartbeat) {
+        RCLCPP_INFO(node->get_logger(), "[Bag Recorder] Publishing heartbeat every %.2f seconds to %s", options.heartbeat_interval, options.heartbeat_topic.c_str());
     }
 
+    // Make Bag Launcher node
+    BagLauncher bag_launcher(node, options);
+
+    // Configure MultiThreadedExecutor
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::executor::create_default_executor_arguments(), 4, true);
+    executor.add_node(node);
+    executor.spin();
+
+    rclcpp::shutdown();
+    return 0;
 }
