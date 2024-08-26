@@ -47,12 +47,6 @@ BagLauncher::BagLauncher(const BLOptions& options)
         name_publisher_ = this->create_publisher<bag_recorder::msg::Rosbag>(
             sanitize_topic(options.name_topic), 5);
     }
-
-    // if (options.publish_heartbeat) {
-    //     heartbeat_timer_ = this->create_wall_timer(
-    //         std::chrono::seconds(heartbeat_interval_),
-    //         [this]() { this->publish_heartbeat(); });
-    // }
 }
 
 /**
@@ -87,7 +81,7 @@ void BagLauncher::Start_Recording(std::shared_ptr<const bag_recorder::msg::Rosba
     if (recorder == recorders_.end()) {
         rclcpp::NodeOptions options;
 
-        auto new_recorder = std::make_shared<BagRecorder>(data_folder_, options); //! what to do about options?
+        auto new_recorder = std::make_shared<BagRecorder>(data_folder_, options);
         // auto new_recorder = std::make_shared<BagRecorder>(data_folder_);
         recorders_[msg->config] = new_recorder;
     }
@@ -152,7 +146,6 @@ void BagLauncher::Stop_Recording(std::shared_ptr<const std_msgs::msg::String> ms
     // Find recorder in map
     auto recorder = recorders_.find(msg->data);
 
-    // Make sure it exists
     //we do this because a faulty name could be published to us in the message
     //we can't assume we are actually recording msg->data
     if (recorder != recorders_.end()) {

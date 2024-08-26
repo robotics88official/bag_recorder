@@ -1,15 +1,12 @@
 #ifndef BAG_RECORDER_H
 #define BAG_RECORDER_H
 
-// #include <heartbeat.h>
-#include <bag_launcher.h>
 #include "rclcpp/serialized_message.hpp"
+#include "rclcpp/rclcpp.hpp"
 #include <queue>
-// #include <string>
 #include <vector>
 #include <set>
 #include <iostream>
-// #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include <filesystem>
 #include <memory>
@@ -20,7 +17,6 @@
 #include "rcpputils/filesystem_helper.hpp"
 #include <rclcpp/exceptions/exceptions.hpp>
 #include <rosbag2_storage/storage_options.hpp>
-#include <rosbag2_compression/compression_options.hpp>
 
 #include <rosbag2_cpp/writer.hpp>
 #include <rosbag2_storage/serialized_bag_message.hpp>
@@ -33,10 +29,12 @@ namespace bag_recorder {
     class OutgoingMessage
     {
         public:
-            OutgoingMessage(std::string const& _topic, std::shared_ptr<rclcpp::SerializedMessage> _msg, std::shared_ptr<std::unordered_map<std::string, std::string>> _connection_header, rclcpp::Time _time);
+            // OutgoingMessage(const std::string& _topic, std::shared_ptr<const rclcpp::SerializedMessage> _msg, std::shared_ptr<std::unordered_map<std::string, std::string>> _connection_header, rclcpp::Time _time);
+            OutgoingMessage(const std::string& _topic, std::shared_ptr<const std_msgs::msg::String> _msg, std::shared_ptr<std::unordered_map<std::string, std::string>> _connection_header, rclcpp::Time _time);
 
             std::string                                             topic;
-            std::shared_ptr<rclcpp::SerializedMessage>              msg;
+            // std::shared_ptr<const rclcpp::SerializedMessage>              msg;
+            std::shared_ptr<const std_msgs::msg::String>              msg;
             std::shared_ptr<std::unordered_map<std::string, std::string>> connection_header;
             rclcpp::Time                                            time;
     };
@@ -66,14 +64,10 @@ namespace bag_recorder {
         private:
             //generates a subcriber
             void subscribe_all();
-            // rclcpp::SubscriptionBase::SharedPtr generate_subscriber(std::string const& topic);
-            // std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>> generate_subscriber(const std::string& topic);
-            std::shared_ptr<rclcpp::Subscription<rclcpp::SerializedMessage>> generate_subscriber(const std::string& topic);
             // std::shared_ptr<rclcpp::Subscription<rclcpp::SerializedMessage>> generate_subscriber(const std::string& topic);
-            // std::shared_ptr<rclcpp::SubscriptionBase> generate_subscriber(const std::string& topic);
-            void subscriber_callback(const std::shared_ptr<rclcpp::SerializedMessage>& msg, std::string const& topic);
-            // void subscriber_callback(const std::shared_ptr<rclcpp::SerializedMessage>& msg, const std::string& topic);
-            // void unsubscribe_all();
+            std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>> generate_subscriber(std::string const& topic);
+            // void subscriber_callback(const std::shared_ptr<const rclcpp::SerializedMessage>& msg, std::string const& topic);
+            void subscriber_callback(const std::shared_ptr<const std_msgs::msg::String> msg, std::string const& topic);
 
             //write thread
             void queue_processor(); //-- starts bag_, writes to queue until end conditin reached, closes bag_
@@ -106,7 +100,8 @@ namespace bag_recorder {
             bool                                    stop_signal_;
             std::mutex                            start_stop_mutex_;
 
-            std::vector<rclcpp::SubscriptionBase::SharedPtr> subscribers_;
+            // std::vector<std::shared_ptr<rclcpp::Subscription<rclcpp::SerializedMessage>>> subscribers_;
+            std::vector<std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>>> subscribers_;
             std::set<std::string>                   subscribed_topics_;
             rclcpp::Time                            subscribe_all_next_;
             std::mutex                            subscribers_mutex_;

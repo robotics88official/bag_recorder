@@ -2,18 +2,17 @@
 #define BAG_LAUNCHER_H
 
 #include "heartbeat.h"
+#include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "bag_recorder/bag_recorder.h"
-// #include "bag_launcher.h"
+#include <bag_recorder/msg/rosbag.hpp>
+#include "bag_recorder.h"
 #include <string>
 #include <vector>
 #include <set>
 #include <map>
 #include <memory>
-#include <bag_recorder/msg/rosbag.hpp>
 #include <filesystem>
 #include <fstream>
-// #include "rclcpp/rclcpp.hpp"
 
 namespace bag_launcher_node {
 
@@ -36,7 +35,6 @@ namespace bag_launcher_node {
 
     class BagLauncher : public rclcpp::Node {
         public:
-            // BagLauncher(const BLOptions bl_options);
             explicit BagLauncher(const BLOptions& options);
 
             ~BagLauncher();
@@ -64,7 +62,7 @@ namespace bag_launcher_node {
             rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
             std::map<std::string, std::shared_ptr<HeartBeat>> heartbeats_;
-            std::map<std::string, std::shared_ptr<BagRecorder>> recorders_;
+            std::map<std::string, std::shared_ptr<bag_recorder::BagRecorder>> recorders_;
     };
 
 }

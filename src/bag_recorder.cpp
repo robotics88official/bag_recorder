@@ -1,10 +1,10 @@
-// #include "bag_launcher.h"
-#include "bag_recorder/bag_recorder.h"
+#include "bag_recorder.h"
 
 
 namespace bag_recorder {
 
-OutgoingMessage::OutgoingMessage(std::string const& _topic, std::shared_ptr<rclcpp::SerializedMessage> _msg, std::shared_ptr<std::unordered_map<std::string, std::string>> _connection_header, rclcpp::Time _time) : //! this is diff from orig implementatiom
+// OutgoingMessage::OutgoingMessage(const std::string& _topic, std::shared_ptr<const rclcpp::SerializedMessage> _msg, std::shared_ptr<std::unordered_map<std::string, std::string>> _connection_header, rclcpp::Time _time) : //! this is diff from orig implementatiom
+OutgoingMessage::OutgoingMessage(const std::string& _topic, std::shared_ptr<const std_msgs::msg::String> _msg, std::shared_ptr<std::unordered_map<std::string, std::string>> _connection_header, rclcpp::Time _time) : //! this is diff from orig implementatiom
     topic(_topic), msg(_msg), connection_header(_connection_header), time(_time)
 {
 }
@@ -18,7 +18,6 @@ OutgoingMessage::OutgoingMessage(std::string const& _topic, std::shared_ptr<rclc
 BagRecorder::BagRecorder(std::string data_folder, const rclcpp::NodeOptions& options = rclcpp::NodeOptions(), bool append_date) :
     Node("bag_recorder", options), data_folder_(data_folder), append_date_(append_date) {
 
-    // In ROS2, the clock and time validity are managed differently from ROS1
     auto clock = this->get_clock();
 
     // Check for a valid time, particularly important if using simulated time
@@ -129,43 +128,36 @@ std::string BagRecorder::start_recording(std::string bag_name, std::vector<std::
 * @details gets start/stop mutex, sets stop flag, kills subscribers
 */
 void BagRecorder::stop_recording() {
-        std::lock_guard<std::mutex> start_stop_lock(start_stop_mutex_);
+    std::lock_guard<std::mutex> start_stop_lock(start_stop_mutex_);
 
-        // If not recording then do nothing
-        if (!bag_active_)
-            return;
+    // If not recording then do nothing
+    if (!bag_active_)
+        return;
 
-        clear_queue_signal_ = true;
+    clear_queue_signal_ = true;
 
     //note that start_stop_lock is acting as a lock for both subscribers_
     //and also for subscribed_topics_
-        for (auto &sub : subscribers_) {
-            sub.reset();
-        }
+    for (auto &sub : subscribers_) {
+        sub.reset();
+    }
 
-        subscribed_topics_.clear();
+    subscribed_topics_.clear();
 
-        RCLCPP_INFO(this->get_logger(), "Stopping BagRecorder, clearing queue.");
-    } // stop_recording()
+    RCLCPP_INFO(this->get_logger(), "Stopping BagRecorder, clearing queue.");
+} // stop_recording()
 
 void BagRecorder::start_writing() {
     // Open bag_ file for writing
     // This got moved here from queue_processor so all the errors that would
     // cause the bag not to start would be in here.
-    rosbag2_cpp::StorageOptions storage_options;
+    rosbag2_storage::StorageOptions storage_options;
     storage_options.uri = bag_filename_ + ".active";
     storage_options.storage_id = "sqlite3";  // Assuming SQLite3 backend
 
     const rosbag2_cpp::ConverterOptions converter_options(
       {rmw_get_serialization_format(),
        rmw_get_serialization_format()});
-    // writer_ = std::make_unique<rosbag2_cpp::writers::SequentialWriter>();
-
-    // rosbag2_compression::CompressionOptions compression_options;
-    // compression_options.format = rosbag2_compression::COMPRESSION_FORMAT_NONE; //no compression
-
-    // bag_.set_compression(rosbag2_compression::COMPRESSION_NONE);
-    // bag_.set_storage_options({bag_filename_ + ".active", 1024 * 768});
 
     try {
         bag_->open(storage_options, converter_options);
@@ -178,8 +170,8 @@ void BagRecorder::start_writing() {
 void BagRecorder::stop_writing() {
     RCLCPP_INFO(this->get_logger(), "Closing %s.", bag_filename_.c_str());
 
-    if (bag_active_) { //! was bag_ before
-        bag_->reset();  // This will destruct the object and close the file
+    if (bag_active_) {
+        bag_.reset();  // This will destruct the object and close the file
         // Rename the file from .active to the final name
         // std::filesystem::rename(rcpputils::fs::path(bag_filename_ + ".active"), rcpputils::fs::path(bag_filename_));
         std::filesystem::rename(bag_filename_ + ".active", bag_filename_);
@@ -272,36 +264,22 @@ bool BagRecorder::is_subscribed_to(std::string topic) {
 * @param [in] topic topic that the subscriber will be generated for
 * @return returns a boost shared_ptr to a ros subscriber
 */
-std::shared_ptr<rclcpp::Subscription<rclcpp::SerializedMessage>> BagRecorder::generate_subscriber(const std::string& topic) {
-// std::shared_ptr<rclcpp::SubscriptionBase> BagRecorder::generate_subscriber(const std::string& topic) {
+std::shared_ptr<rclcpp::Subscription<std_msgs::msg::String>> BagRecorder::generate_subscriber(std::string const& topic) {
+// std::shared_ptr<rclcpp::Subscription<rclcpp::SerializedMessage>> BagRecorder::generate_subscriber(std::string const& topic) {
     RCLCPP_INFO(this->get_logger(), "Subscribing to %s", topic.c_str());
 
-    auto callback = [this, topic](std::shared_ptr<rclcpp::SerializedMessage> msg) {
+    auto callback = [this, topic](const std::shared_ptr<const std_msgs::msg::String>&msg) {
+    // auto callback = [this, topic](std::shared_ptr<const rclcpp::SerializedMessage> &msg) {
         this->subscriber_callback(msg, topic);
     };
 
-    auto sub = this->create_subscription<rclcpp::SerializedMessage>(
+    // auto sub = this->create_subscription<rclcpp::SerializedMessage>(
+    auto sub = this->create_subscription<std_msgs::msg::String>(
         topic, rclcpp::QoS(10).best_effort().durability_volatile(), callback);
 
     subscribed_topics_.insert(topic);
     return sub;
 }
-
-
-// template<typename MsgType>
-// std::shared_ptr<rclcpp::SubscriptionBase> BagRecorder::generate_subscriber(const std::string& topic) {
-//     RCLCPP_INFO(this->get_logger(), "Subscribing to %s", topic.c_str());
-
-//     auto callback = [this, topic](typename MsgType::SharedPtr msg) {
-//         this->subscriber_callback<MsgType>(msg, topic);
-//     };
-
-//     auto sub = this->create_subscription<MsgType>(
-//         topic, rclcpp::QoS(10).best_effort().durability_volatile(), callback);
-
-//     subscribed_topics_.insert(topic);
-//     return sub;
-// }
 
 
 /**
@@ -312,24 +290,27 @@ std::shared_ptr<rclcpp::Subscription<rclcpp::SerializedMessage>> BagRecorder::ge
 * @param [count] pointer to an in, fills template requirements but not used
 * @details turns a message into and OutgoingMessage and adds it to the queue to be written.
 */
-void BagRecorder::subscriber_callback(const std::shared_ptr<rclcpp::SerializedMessage>& msg, const std::string& topic) {
+// void BagRecorder::subscriber_callback(const std::shared_ptr<const rclcpp::SerializedMessage>& msg, std::string const& topic) {
+void BagRecorder::subscriber_callback(const std::shared_ptr<const std_msgs::msg::String> msg, std::string const& topic) {
     auto rectime = this->now();
 
     // Generate new outgoing message
     auto connection_header = std::make_shared<std::unordered_map<std::string, std::string>>();
-    OutgoingMessage out(topic, msg, connection_header, rectime); //! not sure about msg
+    OutgoingMessage out(topic, msg, connection_header, rectime);
 
     // Writes message to queue
     {
         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
         message_queue_->push(out);
-        queue_size_ += out.msg->size();
+        queue_size_ += out.msg->data.size();
+        // queue_size_ += out.msg->size();
 
         // Make sure we are not exceeding buffer size
         while (buffer_size_ > 0 && queue_size_ > buffer_size_) {
             OutgoingMessage drop = message_queue_->front();
             message_queue_->pop();
-            queue_size_ -= drop.msg->size();
+            queue_size_ -= drop.msg->data.size();
+            // queue_size_ -= drop.msg->size();
 
             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "rosbag2 record buffer exceeded. Dropping oldest queued message.");
         }
@@ -338,38 +319,6 @@ void BagRecorder::subscriber_callback(const std::shared_ptr<rclcpp::SerializedMe
     // Notify write thread
     queue_condition_.notify_all();
 } // subscriber_callback()
-
-// template<typename MsgType>
-// void BagRecorder::subscriber_callback(typename MsgType::SharedPtr msg, const std::string& topic) {
-//     auto rectime = this->now();
-
-//     // Convert the msg to a serialized format or a common representation as needed
-//     // Assume serialize_msg returns a std::shared_ptr<SerializedMessage> equivalent
-//     auto serialized_msg = serialize_msg<MsgType>(msg);
-
-//     // Generate new outgoing message assuming OutgoingMessage accepts a serialized message
-//     auto connection_header = std::make_shared<std::unordered_map<std::string, std::string>>();
-//     OutgoingMessage out(topic, serialized_msg, connection_header, rectime);
-
-//     // Writes message to queue
-//     {
-//         std::lock_guard<std::mutex> queue_lock(queue_mutex_);
-//         message_queue_->push(out);
-//         queue_size_ += serialized_msg->size();  // Adjust according to actual size calculation
-
-//         // Make sure we are not exceeding buffer size
-//         while (buffer_size_ > 0 && queue_size_ > buffer_size_) {
-//             OutgoingMessage drop = message_queue_->front();
-//             message_queue_->pop();
-//             queue_size_ -= drop.msg->size();  // Adjust size decrement
-
-//             RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 5000, "rosbag2 record buffer exceeded. Dropping oldest queued message.");
-//         }
-//     }
-
-//     // Notify write thread
-//     queue_condition_.notify_all();
-// }
 
 
 /**
@@ -392,18 +341,18 @@ void BagRecorder::queue_processor() {
     while (rclcpp::ok() || !message_queue_->empty()) {
         queue_lock.lock();
 
-        bool finished = false;
+        // bool finished = false;
 
         while (message_queue_->empty()) {
             if (stop_signal_ || clear_queue_signal_) {
-                finished = true;
+                // finished = true;
                 queue_lock.unlock();
                 break;
             }
 
             if (!rclcpp::ok()) {
                 queue_lock.unlock();
-                finished = true;
+                // finished = true;
                 break;
             }
 
@@ -421,12 +370,18 @@ void BagRecorder::queue_processor() {
         if (!message_queue_->empty()) {
             auto out = message_queue_->front();
             message_queue_->pop();
-            queue_size_ -= out.msg->size();
+            queue_size_ -= out.msg->data.size();
+            // queue_size_ -= out.msg->size();
             queue_lock.unlock();
 
             bag_message->topic_name = out.topic;
-            // bag_message->serialized_data = out.msg;
-            bag_message->serialized_data = std::make_shared<rcutils_uint8_array_t>(out.msg->release_rcl_serialized_message());
+            // auto mutable_msg = std::make_shared<rclcpp::SerializedMessage>(*out.msg);
+            // bag_message->serialized_data = std::make_shared<rcutils_uint8_array_t>(mutable_msg->release_rcl_serialized_message());
+            auto serializer = rclcpp::Serialization<std_msgs::msg::String>();
+            auto serialized_msg = rclcpp::SerializedMessage();
+            serializer.serialize_message(out.msg.get(), &serialized_msg);
+            bag_message->serialized_data = std::make_shared<rcutils_uint8_array_t>(std::move(serialized_msg.release_rcl_serialized_message()));
+
             bag_message->time_stamp = out.time.nanoseconds();
 
 
@@ -448,12 +403,12 @@ void BagRecorder::queue_processor() {
 }
 
 bool BagRecorder::check_duration(const rclcpp::Time& t) {
-    if (t - start_time_ > rclcpp::Duration(split_bag_s_)) {
-        while (t - start_time_ > rclcpp::Duration(split_bag_s_)) {
+    if (t - start_time_ > rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(split_bag_s_ * 1e9))) {
+        while (t - start_time_ > rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(split_bag_s_ * 1e9))) {
             stop_writing();
             split_count_++;
             updateFileName();
-            start_time_ += rclcpp::Duration(split_bag_s_);
+            start_time_ += rclcpp::Duration::from_nanoseconds(static_cast<int64_t>(split_bag_s_ * 1e9));
             start_writing();
         }
         return true;
@@ -513,7 +468,6 @@ void BagRecorder::subscribe_all() {
 * @details Uses statvfs if BOOST version < 3, else uses boost. Sets class
 * variable checks_failed_ to true or false depending on results.
 */
-//! might need to cross check this function
 void BagRecorder::check_disk() {
     std::filesystem::path p = std::filesystem::absolute(bag_filename_);
     p = p.parent_path();

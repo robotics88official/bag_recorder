@@ -4,7 +4,7 @@
   <name>bag_recorder</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
-  <maintainer email="som.vaidehi920@gmail.com">vaidehi</maintainer>
+  <maintainer email="vaidehi@robotics88.com">vaidehi</maintainer>
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

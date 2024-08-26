@@ -10,16 +10,13 @@ int main(int argc, char** argv) {
     BLOptions options;
 
     // Load parameter strings with no default value
-    // node->declare_parameter("configuration_directory");
     // Declaring a parameter with a default value
-    // node->declare_parameter<std::string>("data_directory", "/default/path"); //! put this default path
 
     if (!node->get_parameter("configuration_directory", options.configuration_directory)) {
         RCLCPP_ERROR(node->get_logger(), "Unable to start Bag Recorder Node. No configuration directory supplied.");
         return 0;
     }
 
-    // node->declare_parameter("data_directory");
     if (!node->get_parameter("data_directory", options.data_directory)) {
         RCLCPP_ERROR(node->get_logger(), "Unable to start Bag Recorder Node. No data directory supplied.");
         return 0;
@@ -59,14 +56,8 @@ int main(int argc, char** argv) {
     }
 
     // Make Bag Launcher node
-    // BagLauncher bag_launcher(node, options);
     auto bag_launcher = std::make_shared<BagLauncher>(options);
     rclcpp::spin(bag_launcher);
-
-    // // Configure MultiThreadedExecutor
-    // rclcpp::executors::MultiThreadedExecutor executor(rclcpp::executor::create_default_executor_arguments(), 4, true);
-    // executor.add_node(node);
-    // executor.spin();
 
     rclcpp::shutdown();
     return 0;
