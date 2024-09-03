@@ -63,10 +63,22 @@ ament_target_dependencies(${PROJECT_NAME}_node
 target_link_libraries(${PROJECT_NAME}_node  recorder ${PROJECT_NAME}__rosidl_typesupport_cpp)
 
 # Install targets
-install(TARGETS ${PROJECT_NAME}_node recorder
-  DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY include/
-  DESTINATION include)
+install(TARGETS
+  ${PROJECT_NAME}_node 
+  recorder
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
 
+# install(DIRECTORY include/
+#   DESTINATION include)
+
+install(DIRECTORY launch
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY config
+  DESTINATION share/${PROJECT_NAME}
+)
 # Package setup
 ament_package()

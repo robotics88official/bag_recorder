@@ -12,11 +12,13 @@ int main(int argc, char** argv) {
     // Load parameter strings with no default value
     // Declaring a parameter with a default value
 
+    node->declare_parameter("configuration_directory", options.configuration_directory);
     if (!node->get_parameter("configuration_directory", options.configuration_directory)) {
         RCLCPP_ERROR(node->get_logger(), "Unable to start Bag Recorder Node. No configuration directory supplied.");
         return 0;
     }
 
+    node->declare_parameter("data_directory", options.data_directory);
     if (!node->get_parameter("data_directory", options.data_directory)) {
         RCLCPP_ERROR(node->get_logger(), "Unable to start Bag Recorder Node. No data directory supplied.");
         return 0;
